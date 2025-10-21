@@ -195,9 +195,9 @@ class BpeTokenizer:
                     pair_list.append((self.merges_dic[pkey], i1, pkey))
             if len(pair_list) == 0:
                 break
-            _, max_i, _ = min(pair_list)
-            byte_list[max_i] += byte_list[max_i+1]
-            del byte_list[max_i+1]
+            _, min_i, _ = min(pair_list)
+            byte_list[min_i] += byte_list[min_i+1]
+            del byte_list[min_i+1]
         return byte_list
 
     def encode(self, text: str) -> list[int]:
