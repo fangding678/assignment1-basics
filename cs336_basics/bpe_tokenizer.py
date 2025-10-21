@@ -157,7 +157,14 @@ class BpeTokenizer:
 
             cnt, tmp_dic = byte_pair_dic.get(most_freq_pair)
             for row, col_list in tmp_dic.items():
-                for col in reversed(sorted(col_list)):
+                cc = 0
+                pre_col = -1
+                for col in sorted(col_list):
+                    col -= cc
+                    if col == pre_col:
+                        continue
+                    pre_col = col
+                    cc += 1
                     byte_list, c = byte_list_count_list[row]
                     left_pair = None if col == 0 else (byte_list[col-1], byte_list[col])
                     right_pair = None if col >= len(byte_list) - 2 else (byte_list[col+1], byte_list[col+2])
