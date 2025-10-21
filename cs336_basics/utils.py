@@ -1,6 +1,7 @@
 import logging
 import cProfile
 import pstats
+import regex
 logging.basicConfig(
    level=logging.INFO,
    format='[%(asctime)s] [%(levelname)s] %(message)s',

@@ -2,39 +2,26 @@ import regex as re
 import collections
 import json
 import itertools
+from collections.abc import Iterable, Iterator
 from .utils import *
+from tests.common import gpt2_bytes_to_unicode
 import heapq
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 
-class Pair:
-    def __init__(self, pair, cnt):
-        self.pair = pair
-        self.cnt = cnt
-
-    def __lt__(self, other):
-        if self.cnt != other.cnt:
-            return self.cnt > other.cnt
-        elif len(self.pair) < len(other.pair):
-            return -1
-        elif len(self.pair) == len(other.pair) and self.pair < other.pair:
-            return -1
-        else:
-            return 1
-
-
 class BpeTokenizer:
-    def __init__(self, input_path, vocab_size, special_tokens):
+    def __init__(self, input_path, vocab_size, special_tokens, vocab=None, merges=None):
         self.input_path = input_path
         self.vocab_size = vocab_size
         self.special_tokens = special_tokens
         self.next_token_id = 0
-        self.vocab = dict()
-        self.merges = list()
-        self.debug = 0
-        self.debug_dic1 = {}
-        self.debug_dic2 = {}
+        self.vocab = dict() if vocab is None else vocab
+        self.bytes_to_id = {v: k for k, v in self.vocab.items()}
+        self.merges = list() if merges is None else merges
+        self.merges_dic = {(m[0], m[1]): i for i, m in enumerate(self.merges)}
+        self.gpt2_bytes_to_unicode_dic = gpt2_bytes_to_unicode()
+        self.gpt2_byte_decoder = {v: k for k, v in gpt2_bytes_to_unicode().items()}
 
     def init_vocab(self):
         for token in self.special_tokens:
@@ -194,15 +181,62 @@ class BpeTokenizer:
 
         pass
 
-    # @ana_profile
-    def train_bpe(self) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-        self.init_vocab()
+    @classmethod
+    def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
+        pass
+
+    def get_merge(self, wbytes) -> list[bytes]:
+        byte_list = [bytes([b]) for b in wbytes]
+        while len(byte_list) > 1:
+            pair_list = []
+            for i1 in range(len(byte_list)-1):
+                pkey = (byte_list[i1], byte_list[i1+1])
+                if pkey in self.merges_dic:
+                    pair_list.append((self.merges_dic[pkey], i1, pkey))
+            if len(pair_list) == 0:
+                break
+            _, max_i, _ = min(pair_list)
+            byte_list[max_i] += byte_list[max_i+1]
+            del byte_list[max_i+1]
+        return byte_list
+
+    def encode(self, text: str) -> list[int]:
+        if self.special_tokens:
+            split_pattern = '|'.join([re.escape(st) for st in sorted(self.special_tokens, key=len, reverse=True)])
+            text_list = [part for part in re.split(f'({split_pattern})', text) if part]
+            word_list = []
+            for text in text_list:
+                if text in self.special_tokens:
+                    word_list.append(text)
+                else:
+                    word_list.extend(re.findall(PAT, text))
+            # word_list = list(itertools.chain(*[re.findall(PAT, doc) for doc in text_list]))
+        else:
+            word_list = re.findall(PAT, text)
+        res_ids = []
+        for word in word_list:
+            wbytes = word.encode('utf-8')
+            if wbytes in self.bytes_to_id:
+                res_ids.append(self.bytes_to_id[wbytes])
+            else:
+                byte_list = self.get_merge(wbytes)
+                res_ids.extend([self.bytes_to_id[bb] for bb in byte_list])
+        return res_ids
+
+    def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        for text in iterable:
+            yield from self.encode(text)
+
+    def decode(self, ids: list[int]) -> str:
+        all_bytes = b''.join([self.vocab[id1] for id1 in ids])
+        return all_bytes.decode('utf-8', errors='replace')
+
+    def pre_tokenize(self):
         with open(self.input_path, 'r', encoding='utf-8') as fr:
-            text_utf8 = fr.read()
-        # text_utf8 = ' 10000 ....1 ads'
+            text_str = fr.read()
         escaped_tokens = [re.escape(st) for st in self.special_tokens]  # 返回 "<\|endoftext\|>"
         split_pattern = "|".join(escaped_tokens)
-        documents = [part for part in re.split(split_pattern, text_utf8) if part]
+        documents = [part for part in re.split(split_pattern, text_str) if part]
 
         word_list = list(itertools.chain(*[re.findall(PAT, doc) for doc in documents]))
         # text_list_iter = re.finditer(PAT, text_utf8)
@@ -210,14 +244,15 @@ class BpeTokenizer:
         for word in word_list:
             byte_list_count_dic[tuple([bytes([i]) for i in word.encode('utf-8')])] += 1
         byte_list_count_list = [(list(k), v) for k, v in byte_list_count_dic.items()]
+        return byte_list_count_list
+        pass
 
-        # print()
-        # print(tuple([bytes([i]) for i in ' ....'.encode('utf-8')]))
-        # for s in ['...', ' ...', '....', ' ....']:
-        #     print('"' + s + '"', byte_list_count_dic[tuple([bytes([i]) for i in s.encode('utf-8')])])
+    @ana_profile
+    def train_bpe(self) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+        self.init_vocab()
+        byte_list_count_list = self.pre_tokenize()
 
         simple_version = False
-
         if simple_version:
             while self.vocab_size > self.next_token_id:
                 self.update_one_vocab(byte_list_count_list)
