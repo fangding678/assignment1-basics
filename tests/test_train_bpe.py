@@ -21,9 +21,10 @@ def test_train_bpe_speed():
         special_tokens=["<|endoftext|>"],
     )
     end_time = time.time()
+    print('end_time - start_time', end_time - start_time)
     assert end_time - start_time < 1.5
 
-'''
+
 def test_train_bpe():
     input_path = FIXTURES_PATH / "corpus.en"
     vocab, merges = run_train_bpe(
@@ -47,6 +48,10 @@ def test_train_bpe():
             )
             for merge_token_1, merge_token_2 in gpt2_reference_merges
         ]
+    # print('#' * 50)
+    # print('merges\n', merges)
+    # print('reference_merges\n', reference_merges)
+    # print('#' * 50)
     assert merges == reference_merges
 
     # Compare the vocab to the expected output vocab
@@ -87,4 +92,4 @@ def test_train_bpe_special_tokens(snapshot):
             "merges": merges,
         },
     )
-'''
+

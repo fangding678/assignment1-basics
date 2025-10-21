@@ -88,22 +88,20 @@ class BpeTokenizer:
                     new_byte_list.append(byte_list[ii])
                     ii += 1
                 byte_list_count_list[jj] = (tuple(new_byte_list), v)
-        pass
 
-    def del_pair(self, index, c, byte_pair_dic, old_pair, shift):
+        return
+
+    def del_pair(self, index, c, byte_pair_dic, old_pair):
         if old_pair is None:
             return
         row, col = index
-        try:
-            pair_value = byte_pair_dic.get(old_pair)
-            tmp_index_dic = pair_value[1]
-        except:
-            print()
-            print(old_pair)
-            exit()
+
+        pair_value = byte_pair_dic.get(old_pair)
+        tmp_index_dic = pair_value[1]
+
         col_list = tmp_index_dic.get(row)
         for ic in range(len(col_list)):
-            if col_list[ic] == col + shift:
+            if col_list[ic] == col:
                 del col_list[ic]
                 break
         if len(col_list) == 0:
@@ -111,10 +109,9 @@ class BpeTokenizer:
         pair_value[0] -= c
         if pair_value[0] <= 0:
             byte_pair_dic.pop(old_pair)
-
         pass
 
-    def add_pair(self, index, c, byte_pair_dic, new_pair, shift):
+    def add_pair(self, index, c, byte_pair_dic, new_pair):
         if new_pair is None:
             return
         row, col = index
@@ -123,12 +120,12 @@ class BpeTokenizer:
             pair_value[0] += c
             tmp_index_dic = pair_value[1]
             if row in tmp_index_dic:
-                tmp_index_dic[row].append(col+shift)
+                tmp_index_dic[row].append(col)
             else:
-                tmp_index_dic[row] = [col+shift]
+                tmp_index_dic[row] = [col]
         else:
             tmp_index_dic = {}
-            tmp_index_dic[row] = [col+shift]
+            tmp_index_dic[row] = [col]
             byte_pair_dic[new_pair] = [c, tmp_index_dic]
         pass
 
@@ -150,10 +147,6 @@ class BpeTokenizer:
                     tmp_dic = {}
                     tmp_dic[i] = [j]
                     byte_pair_dic[pair_key] = [c, tmp_dic]
-        print()
-        print((b'i', b'n'), byte_pair_dic[(b'i', b'n')])
-        print()
-        print((b'n', b'i'), byte_pair_dic[(b'n', b'i')])
 
         while self.next_token_id < self.vocab_size and byte_pair_dic:
             most_freq_kv = max(byte_pair_dic.items(), key=lambda x: (x[1][0], x[0]))
@@ -167,20 +160,16 @@ class BpeTokenizer:
                 for col in reversed(sorted(col_list)):
                     byte_list, c = byte_list_count_list[row]
                     left_pair = None if col == 0 else (byte_list[col-1], byte_list[col])
-                    right_pair = None if col == len(byte_list) - 2 else (byte_list[col+1], byte_list[col+2])
+                    right_pair = None if col >= len(byte_list) - 2 else (byte_list[col+1], byte_list[col+2])
                     byte_list[col] += byte_list[col+1]
                     del byte_list[col+1]
                     new_left_pair = None if col == 0 else (byte_list[col - 1], byte_list[col])
                     new_right_pair = None if col == len(byte_list) - 1 else (byte_list[col], byte_list[col + 1])
 
-                    if left_pair == (b'0', b'0'):
-                        print(row, (b'0', b'0'), tmp_dic)
-                        print(byte_list, left_pair, right_pair, new_left_pair, new_right_pair)
-
-                    self.del_pair((row, col), c, byte_pair_dic, left_pair, -1)
-                    self.del_pair((row, col), c, byte_pair_dic, right_pair, 1)
-                    self.add_pair((row, col), c, byte_pair_dic, new_left_pair, -1)
-                    self.add_pair((row, col), c, byte_pair_dic, new_right_pair, 0)
+                    self.del_pair((row, col-1), c, byte_pair_dic, left_pair)
+                    self.del_pair((row, col+1), c, byte_pair_dic, right_pair)
+                    self.add_pair((row, col-1), c, byte_pair_dic, new_left_pair)
+                    self.add_pair((row, col), c, byte_pair_dic, new_right_pair)
                     update_pos_set = set()
                     for ind in range(col+1, len(byte_list)-1):
                         update_pos_pair = (byte_list[ind], byte_list[ind+1])
@@ -203,7 +192,7 @@ class BpeTokenizer:
         self.init_vocab()
         with open(self.input_path, 'r', encoding='utf-8') as fr:
             text_utf8 = fr.read()
-
+        # text_utf8 = ' 10000 ....1 ads'
         escaped_tokens = [re.escape(st) for st in self.special_tokens]  # 返回 "<\|endoftext\|>"
         split_pattern = "|".join(escaped_tokens)
         documents = [part for part in re.split(split_pattern, text_utf8) if part]
@@ -214,6 +203,11 @@ class BpeTokenizer:
         for word in word_list:
             byte_list_count_dic[tuple([bytes([i]) for i in word.encode('utf-8')])] += 1
         byte_list_count_list = [(list(k), v) for k, v in byte_list_count_dic.items()]
+
+        # print()
+        # print(tuple([bytes([i]) for i in ' ....'.encode('utf-8')]))
+        # for s in ['...', ' ...', '....', ' ....']:
+        #     print('"' + s + '"', byte_list_count_dic[tuple([bytes([i]) for i in s.encode('utf-8')])])
 
         simple_version = False
 
