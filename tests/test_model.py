@@ -15,6 +15,7 @@ from .adapters import (
     run_transformer_lm,
     run_linear,
     run_embedding,
+    run_softmax,
 )
 
 
@@ -200,3 +201,18 @@ def test_silu_matches_pytorch():
     expected_output = F.silu(x)
     actual_output = run_silu(x)
     numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-6)
+
+
+def test_softmax_matches_pytorch():
+    x = torch.tensor(
+        [
+            [0.2352, 0.9259, 0.5189, 0.4725, 0.9730],
+            [0.7581, 0.9692, 0.2129, 0.9345, 0.0149],
+        ]
+    )
+    x = torch.randint(1, 100, (5, 4, 3)).to(torch.float32)
+    dim = 1
+    expected_output = F.softmax(x, dim)
+    actual_output = run_softmax(x, dim)
+    numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-6)
+
