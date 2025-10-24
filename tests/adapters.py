@@ -15,6 +15,7 @@ from torch import Tensor
 from cs336_basics.bpe_tokenizer import BpeTokenizer
 from cs336_basics.transformer import Linear, Embedding, RMSNorm, SwiGLU, RotaryPositionalEmbedding, silu, softmax
 from cs336_basics.transformer import scaled_dot_product_attention, MultiHeadSelfAttention, MultiHeadSelfAttentionRope
+from cs336_basics.transformer import TransformerBlock, TransformerLM
 
 
 def run_linear(
@@ -146,10 +147,6 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    # print('\nin_features.shape', in_features.shape)
-    # print('\nq_proj_weight.shape', q_proj_weight.shape)
-    # print('\nd_model', d_model)
-    # print('\nin_features', in_features)
     multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads, q_proj_weight, k_proj_weight, v_proj_weight,
                                                        o_proj_weight)
     return multi_head_self_attention(in_features)
@@ -290,7 +287,8 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    trandformer_block = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta, weights)
+    return trandformer_block(in_features)
 
 
 def run_transformer_lm(
@@ -372,7 +370,8 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta, weights)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
