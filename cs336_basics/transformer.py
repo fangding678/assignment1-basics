@@ -286,6 +286,19 @@ def test_resource_accounting():
     resource_accounting(context_length=16384)
 
 
+class CrossEntropyLoss(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(inputs, targets) -> Float[Tensor, ""]:
+        m_inputs = inputs - torch.max(inputs, -1, keepdim=True).values
+        m_targets = m_inputs.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+        # p = torch.exp(m_targets) / torch.sum(torch.exp(m_inputs), -1)
+        # result = torch.mean(-torch.log(p))
+        result = torch.mean(torch.log(torch.sum(torch.exp(m_inputs), -1)) - m_targets)
+        return result
+
 
 
 
