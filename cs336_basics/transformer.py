@@ -215,6 +215,7 @@ class TransformerBlock(torch.nn.Module):
 class TransformerLM(torch.nn.Module):
     def __init__(self, vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta, weights):
         super().__init__()
+        self.context_length = context_length
         self.embedding = Embedding(vocab_size, d_model, weights['token_embeddings.weight'])
         self.final_norm = RMSNorm(d_model, weights=weights['ln_final.weight'])
         self.output_linear = Linear(vocab_size, d_model, weights['lm_head.weight'])
@@ -239,6 +240,31 @@ class TransformerLM(torch.nn.Module):
         x = self.output_linear(x)
         # x = softmax(x)
         return x
+
+    @torch.no_grad()
+    def generate(self, x: torch.Tensor, max_token_num: int, temperature: float = 1.0, eos_token_id: str = None,
+                 top_k: int = None):
+        seq_len = x.shape[1]
+        next_token_list = []
+        if seq_len > self.context_length:
+            seq_len = self.context_length
+            x = x[:, :seq_len]
+        while seq_len < max_token_num:
+            logit = self.forward(x)[:, -1]
+            if top_k:
+                logit_k, logit_i = torch.topk(logit / temperature, top_k)
+                p = softmax(logit_k)
+                sample = torch.multinomial(p, 1)
+                next_token_id = logit_i[torch.arange(0, sample.shape[0]), sample[:, 0]]
+            else:
+                p = softmax(logit / temperature)
+                next_token_id = torch.argmax(p, -1)
+            next_token_list.append(next_token_id)
+            if next_token_id == eos_token_id:
+                break
+            x = torch.cat([x, torch.unsqueeze(next_token_id, -1)], dim=-1)
+            seq_len += 1
+        return next_token_list
 
 
 def resource_accounting(vocab_size=50257, context_length=1024, num_layers=48, d_model=1600, num_heads=25, d_ff=6400):
